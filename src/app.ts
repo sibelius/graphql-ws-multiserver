@@ -8,6 +8,9 @@ import { config } from "./config";
 import { schema } from "./schema/schema";
 import websocket from 'koa-easy-ws';
 import logger from 'koa-logger';
+import { createServer } from 'graphql-transport-ws';
+import { execute, subscribe } from 'graphql';
+import { createWebsocketMiddleware } from './websocketMiddleware';
 
 const app = new Koa();
 const router = new Router();
@@ -15,7 +18,7 @@ const router = new Router();
 app.use(bodyParser());
 app.use(logger());
 app.use(cors({ maxAge: 86400, credentials: true }));
-app.use(websocket());
+app.use(createWebsocketMiddleware());
 
 router.get('/', ctx => {
   const info = [
@@ -69,6 +72,52 @@ router.all('/pure/ws', async (ctx) => {
     });
   }
 });
+
+router.all('/public/ws', async (ctx) => {
+  if (ctx.wss) {
+    ctx.wss.handleUpgrade(
+      ctx.req,
+      ctx.request.socket,
+      Buffer.alloc(0),
+      (ws) => {
+        ctx.wss.emit('connection', ws, ctx.req);
+      },
+    );
+    ctx.respond = false;
+
+    createServer(
+      {
+        schema,
+        execute,
+        subscribe,
+      },
+      ctx.wss
+    );
+  }
+});
+
+router.all('/private/ws', async (ctx) => {
+  if (ctx.wss) {
+    ctx.wss.handleUpgrade(
+      ctx.req,
+      ctx.request.socket,
+      Buffer.alloc(0),
+      (ws) => {
+        ctx.wss.emit('connection', ws, ctx.req);
+      },
+    );
+    ctx.respond = false;
+
+    createServer(
+      {
+        schema,
+        execute,
+        subscribe,
+      },
+      ctx.wss
+    );
+  }
+})
 
 app.use(router.routes()).use(router.allowedMethods());
 
